@@ -45,11 +45,10 @@ col_chat, col_monitor = st.columns([11, 9])
 
 # ==================== 💬 左侧：学生端对话界面 ====================
 with col_chat:
-    st.subheader("💬 Phoebe 学术对练舱（一步步真实模拟）")
-    st.caption("💡 提示：你可以扮演学生，从‘我看到一个朋友圈公众号推文说中国变绿了’开始聊起，看看AI如何一步步引导你调用 SIFT 和 CRAAP。")
+    st.subheader("💬 Phoebe 学术对练舱")
     
     # 渲染聊天记录
-    chat_container = st.container(height=500)
+    chat_container = st.container(height=520)
     with chat_container:
         for msg in st.session_state.climate_chat:
             avatar = "👤" if msg["role"] == "student" else "🤖"
@@ -71,7 +70,7 @@ with col_chat:
             with st.chat_message("assistant", avatar="🤖"):
                 with st.spinner("AI 导师正在研判思维流并组织追问..."):
                     
-                    # B. 组装送给大模型的上下文（包含极度精准的 Skill 判断逻辑和任务背景）
+                    # B. 组装送给大模型的上下文
                     system_prompt = """你是一个精通批判性思维（SIFT 与 CRAAP 原则）的高阶学术论文导师。
                     当前的教学任务是引导学生 Phoebe 探究案例：中国在多大程度上使得地球变得更可持续（更绿）？
                     
@@ -97,16 +96,14 @@ with col_chat:
                     """
                     
                     messages = [{"role": "system", "content": system_prompt}]
-                    for m in st.session_state.climate_chat[:-1]: # 不包含刚加的那条，保持纯对话流
+                    for m in st.session_state.climate_chat[:-1]:
                         api_role = "user" if m["role"] == "student" else "assistant"
                         content = m["content"] if isinstance(m["content"], str) else m.get("tutor_reply", "")
                         messages.append({"role": api_role, "content": content})
                     
-                    # 加入学生刚说的最新一句话
                     messages.append({"role": "user", "content": user_input})
                     
                     try:
-                        # C. 调用 DeepSeek 核心接口
                         response = client.chat.completions.create(
                             model="deepseek-chat",
                             messages=messages,
@@ -114,16 +111,13 @@ with col_chat:
                             temperature=0.7
                         )
                         
-                        # D. 解析 JSON 响应
                         result_json = json.loads(response.choices[0].message.content)
                         ai_reply = result_json.get("tutor_reply", "")
                         activated_skills = result_json.get("activated_skills", [])
                         skill_exp = result_json.get("skill_explanation", "")
                         
-                        # 渲染到前端
                         st.write(ai_reply)
                         
-                        # E. 把包含 Skill 研判的数据存入历史，供右侧面板渲染
                         st.session_state.climate_chat.append({
                             "role": "ai",
                             "content": ai_reply,
@@ -140,7 +134,6 @@ with col_monitor:
     st.subheader("🧠 Skill 实时调用观察器 (监测端)")
     st.markdown("**📊 SIFT × CRAAP 技能激活墙**")
     
-    # 动态抓取最后一轮 AI 评估出来的技能指标
     last_ai_turn = None
     for msg in reversed(st.session_state.climate_chat):
         if msg["role"] == "ai" and msg.get("explanation"):
@@ -148,14 +141,12 @@ with col_monitor:
             break
             
     if last_ai_turn:
-        # 1. 亮点展示当前被激活的 Skill
         active_skills_list = last_ai_turn.get("skills", [])
         if active_skills_list:
             st.success(f"🚀 **当前成功激活的 Skill**：{', '.join(active_skills_list)}")
         else:
             st.warning("⚠️ **当前未激活任何高阶 Skill**（学生可能处于盲信或等待喂饭状态）")
             
-        # 2. 打印 AI 后台的思维心流
         st.markdown("**🧠 AI 导师教研研判日志：**")
         st.info(f"👉 {last_ai_turn.get('explanation')}")
     else:
@@ -164,14 +155,12 @@ with col_monitor:
     st.markdown("---")
     st.markdown("**📐 本案挂载的批判性思维技能图谱参考：**")
     
-    # 在右侧展示挂载的完整的标准技能卡片
     for s_id, s_desc in SKILL_MAP.items():
         if last_ai_turn and any(s_id.split(" ")[0] in k for k in last_ai_turn.get("skills", [])):
             st.markdown(f"✅ **{s_id}**\n<small style='color:#2ecc71;'>{s_desc}</small>", unsafe_allow_html=True)
         else:
             st.markdown(f"⚫ **{s_id}**\n<small style='color:#7f8c8d;'>{s_desc}</small>", unsafe_allow_html=True)
 
-    # 底部提供清空重来的按钮
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🗑️ 清空对练，重新加载案例"):
         del st.session_state.climate_chat
